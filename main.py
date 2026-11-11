@@ -1,7 +1,9 @@
+import os
 import asyncio
 import logging
 import sqlite3
 import requests
+from aiohttp import web
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
@@ -14,14 +16,14 @@ ADMIN_IDS = [8419760844]  # সুপার অ্যাডমিন আইড�
 DEFAULT_CONFIG = {
     "api_url": "https://1xpanel.com/api/v2",
     "api_key": "e19e34d1e991b739cc18a9917e6d9144",
-    "service_id": "1936",           # Reaction + Free View Service ID
-    "reaction_rate": "3000",        # 1000 রিঅ্যাকশনের কয়েন রেট
-    "view_rate": "2000",            # 1000 ভিউয়ের শো-রেট
-    "auto_order_qty": "100",        # গ্রুপে নতুন পোস্ট করলে অটো অর্ডার পরিমাণ
-    "binance_uid": "1122595327",    # বাইনান্স পে ইউআইডি
+    "service_id": "1936",            # Reaction + Free View Service ID
+    "reaction_rate": "3000",         # 1000 রিঅ্যাকশনের কয়েন রেট
+    "view_rate": "2000",             # 1000 ভিউয়ের শো-রেট
+    "auto_order_qty": "100",         # গ্রুপে নতুন পোস্ট করলে অটো অর্ডার পরিমাণ
+    "binance_uid": "1122595327",     # বাইনান্স পে ইউআইডি
     "required_channel": "@GX_SMM_PREMIUM_PANEL",
     "order_log_group": "-1003908562163",
-    "welcome_bonus": "500"          # নতুন ইউজারের ফ্রি বোনাস কয়েন
+    "welcome_bonus": "500"           # নতুন ইউজারের ফ্রি বোনাস কয়েন
 }
 # ==========================================================
 
@@ -177,7 +179,6 @@ async def check_subscription(user_id: int) -> bool:
 
 
 def format_clean_tg_link(raw_text: str) -> str:
-    """গ্রুপ/পোস্ট লিংক সঠিকভাবে ক্লিন ও ফিক্স করার ফাংশন"""
     link = raw_text.strip().split()[0]
     if link.startswith("t.me/"):
         link = "https://" + link
@@ -192,14 +193,14 @@ def get_super_admin_keyboard():
     kb = types.InlineKeyboardMarkup(row_width=2)
     kb.add(
         types.InlineKeyboardButton("🆔 সার্ভিস ID সেট", callback_data="adm_set_service_id"),
-        types.InlineKeyboardButton("💎 কয়েন রেট (1K)", callback_data="adm_set_reaction_rate"),
-        types.InlineKeyboardButton("⚡ অটো অর্ডার Qty", callback_data="adm_set_auto_order_qty"),
+        types.InlineKeyboardButton("💎 কয়েন রেট (1K)", callback_data="adm_set_reaction_rate"),
+        types.InlineKeyboardButton("⚡️ অটো অর্ডার Qty", callback_data="adm_set_auto_order_qty"),
         types.InlineKeyboardButton("💳 Binance UID সেট", callback_data="adm_set_binance_uid"),
         types.InlineKeyboardButton("🔑 API Key পরিবর্তন", callback_data="adm_set_api_key"),
         types.InlineKeyboardButton("🌐 API URL পরিবর্তন", callback_data="adm_set_api_url"),
         types.InlineKeyboardButton("📢 অর্ডার গ্রুপ ID", callback_data="adm_set_order_log_group"),
-        types.InlineKeyboardButton("🎁 ওয়েলকাম বোনাস", callback_data="adm_set_welcome_bonus"),
-        types.InlineKeyboardButton("➕ ইউজার কয়েন অ্যাড/কাট", callback_data="adm_manage_coins"),
+        types.InlineKeyboardButton("🎁 ওয়েলকাম বোনাস", callback_data="adm_set_welcome_bonus"),
+        types.InlineKeyboardButton("➕ ইউজার কয়েন অ্যাড/কাট", callback_data="adm_manage_coins"),
         types.InlineKeyboardButton("🚫 ইউজার ব্যান / আনব্যান", callback_data="adm_ban_unban"),
         types.InlineKeyboardButton("📣 অল ইউজার ব্রডকাস্ট", callback_data="adm_broadcast"),
         types.InlineKeyboardButton("📊 লাইভ স্ট্যাটাস ও ব্যালেন্স", callback_data="adm_stats")
@@ -215,7 +216,7 @@ def get_user_main_keyboard():
         types.InlineKeyboardButton("🤖 অটো গ্রুপ সেটআপ", callback_data="usr_auto_group"),
         types.InlineKeyboardButton("👤 আমার একাউন্ট", callback_data="usr_profile"),
         types.InlineKeyboardButton("💳 বাইনান্স ডিপোজিট", callback_data="usr_deposit"),
-        types.InlineKeyboardButton("ℹ️ নিয়মাবলী ও সাপোর্ট", callback_data="usr_help")
+        types.InlineKeyboardButton("ℹ️ নিয়মাবলী ও সাপোর্ট", callback_data="usr_help")
     )
     return kb
 
@@ -226,7 +227,6 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await state.finish()
     user_id = message.from_user.id
 
-    # ১. যদি অ্যাডমিন হয় -> শুধুমাত্র সুপার অ্যাডমিন প্যানেল দেখাবে (ইউজার বাটন থাকবে না)
     if user_id in ADMIN_IDS:
         panel_bal = smm.balance()
         text = (
@@ -234,7 +234,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🆔 <b>সার্ভিস ID:</b> <code>{get_config('service_id')}</code> (Reaction + Free View)\n"
             f"💎 <b>রেট (1K):</b> <code>{get_config('reaction_rate')} Coins</code>\n"
-            f"⚡ <b>অটো গ্রুপ পোস্ট Qty:</b> <code>{get_config('auto_order_qty')}</code>\n"
+            f"⚡️ <b>অটো গ্রুপ পোস্ট Qty:</b> <code>{get_config('auto_order_qty')}</code>\n"
             f"💳 <b>Binance UID:</b> <code>{get_config('binance_uid')}</code>\n"
             f"💰 <b>প্যানেল ব্যালেন্স:</b> <code>{panel_bal.get('balance', 'N/A')} {panel_bal.get('currency', 'USD')}</code>\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -243,22 +243,21 @@ async def cmd_start(message: types.Message, state: FSMContext):
         await message.answer(text, reply_markup=get_super_admin_keyboard())
         return
 
-    # ২. সাধারণ ইউজারদের জন্য
     user = get_user(user_id, message.from_user.username or "")
     if user[3] == 1:
-        await message.answer("🚫 <b>আপনাকে এই বট থেকে ব্যান করা হয়েছে!</b>")
+        await message.answer("🚫 <b>আপনাকে এই বট থেকে ব্যান করা হয়েছে!</b>")
         return
 
     is_joined = await check_subscription(user_id)
     if not is_joined:
         join_kb = types.InlineKeyboardMarkup(row_width=1)
         join_kb.add(
-            types.InlineKeyboardButton("📢 অফিশিয়াল গ্রুপে জয়েন করুন", url="https://t.me/GX_SMM_PREMIUM_PANEL"),
-            types.InlineKeyboardButton("✅ জয়েন করেছি (Verify)", callback_data="usr_verify_join")
+            types.InlineKeyboardButton("📢 অফিশিয়াল গ্রুপে জয়েন করুন", url="https://t.me/GX_SMM_PREMIUM_PANEL"),
+            types.InlineKeyboardButton("✅ জয়েন করেছি (Verify)", callback_data="usr_verify_join")
         )
         await message.answer(
-            "⚠️ <b>বট ব্যবহার করতে হলে অবশ্যই আমাদের অফিশিয়াল গ্রুপে জয়েন করতে হবে!</b>\n\n"
-            "নিচের বাটনে ক্লিক করে গ্রুপে জয়েন করুন এবং Verify বাটনে চাপ দিন:",
+            "⚠️ <b>বট ব্যবহার করতে হলে অবশ্যই আমাদের অফিশিয়াল গ্রুপে জয়েন করতে হবে!</b>\n\n"
+            "নিচের বাটনে ক্লিক করে গ্রুপে জয়েন করুন এবং Verify বাটনে চাপ দিন:",
             reply_markup=join_kb
         )
         return
@@ -278,11 +277,11 @@ async def verify_join_cb(call: types.CallbackQuery):
     if await check_subscription(call.from_user.id):
         await call.answer("✅ ভেরিফিকেশন সফল!", show_alert=True)
         await call.message.edit_text(
-            "🔥 <b>GX SMM PREMIUM PANEL</b>\n\nনিচের প্রিমিয়াম মেনু থেকে আপনার প্রয়োজনীয় অপশন সিলেক্ট করুন:",
+            "🔥 <b>GX SMM PREMIUM PANEL</b>\n\nনিচের প্রিমিয়াম মেনু থেকে আপনার প্রয়োজনীয় অপশন সিলেক্ট করুন:",
             reply_markup=get_user_main_keyboard()
         )
     else:
-        await call.answer("❌ আপনি এখনো গ্রুপে জয়েন করেননি!", show_alert=True)
+        await call.answer("❌ আপনি এখনো গ্রুপে জয়েন করেননি!", show_alert=True)
 
 
 # ================= SUPER ADMIN CALLBACK HANDLERS =================
@@ -301,7 +300,7 @@ async def admin_callbacks(call: types.CallbackQuery, state: FSMContext):
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🆔 <b>সার্ভিস ID:</b> <code>{get_config('service_id')}</code>\n"
             f"💎 <b>রেট (1K):</b> <code>{get_config('reaction_rate')} Coins</code>\n"
-            f"⚡ <b>অটো গ্রুপ পোস্ট Qty:</b> <code>{get_config('auto_order_qty')}</code>\n"
+            f"⚡️ <b>অটো গ্রুপ পোস্ট Qty:</b> <code>{get_config('auto_order_qty')}</code>\n"
             f"💳 <b>Binance UID:</b> <code>{get_config('binance_uid')}</code>\n"
             f"💰 <b>প্যানেল ব্যালেন্স:</b> <code>{panel_bal.get('balance', 'N/A')} {panel_bal.get('currency', 'USD')}</code>\n"
             "━━━━━━━━━━━━━━━━━━━━━━"
@@ -311,13 +310,13 @@ async def admin_callbacks(call: types.CallbackQuery, state: FSMContext):
 
     setting_map = {
         "adm_set_service_id": ("service_id", "নতুন SMM Service ID লিখুন (যেমন: 1936):"),
-        "adm_set_reaction_rate": ("reaction_rate", "১০০০ রিঅ্যাকশনের জন্য নতুন কয়েন রেট লিখুন (যেমন: 3000):"),
+        "adm_set_reaction_rate": ("reaction_rate", "১০০০ রিঅ্যাকশনের জন্য নতুন কয়েন রেট লিখুন (যেমন: 3000):"),
         "adm_set_auto_order_qty": ("auto_order_qty", "গ্রুপে নতুন পোস্ট হলে অটো কত পরিমাণ অর্ডার যাবে লিখুন (যেমন: 100):"),
         "adm_set_binance_uid": ("binance_uid", "নতুন Binance Pay UID লিখুন:"),
         "adm_set_api_key": ("api_key", "নতুন SMM Panel API Key লিখুন:"),
         "adm_set_api_url": ("api_url", "নতুন SMM Panel API URL লিখুন (যেমন: https://1xpanel.com/api/v2):"),
         "adm_set_order_log_group": ("order_log_group", "অর্ডার নোটিফিকেশন গ্রুপের Chat ID লিখুন (যেমন: -1003908562163):"),
-        "adm_set_welcome_bonus": ("welcome_bonus", "নতুন ইউজার জয়েন করলে কত কয়েন ফ্রি পাবে লিখুন:")
+        "adm_set_welcome_bonus": ("welcome_bonus", "নতুন ইউজার জয়েন করলে কত কয়েন ফ্রি পাবে লিখুন:")
     }
 
     if action in setting_map:
@@ -327,7 +326,7 @@ async def admin_callbacks(call: types.CallbackQuery, state: FSMContext):
         await AdminStates.waiting_for_setting_value.set()
 
     elif action == "adm_manage_coins":
-        await call.message.edit_text("👤 যে ইউজারের কয়েন অ্যাড বা কাটতে চান তার <b>Telegram User ID</b> দিন:")
+        await call.message.edit_text("👤 যে ইউজারের কয়েন অ্যাড বা কাটতে চান তার <b>Telegram User ID</b> দিন:")
         await AdminStates.waiting_for_user_id_coins.set()
 
     elif action == "adm_ban_unban":
@@ -356,7 +355,7 @@ async def admin_callbacks(call: types.CallbackQuery, state: FSMContext):
             f"👥 মোট ইউজার: <b>{total_users} জন</b>\n"
             f"📦 মোট অর্ডার: <b>{total_orders} টি</b>\n"
             f"🤖 অ্যাক্টিভ অটো গ্রুপ: <b>{total_groups} টি</b>\n"
-            f"💰 ওয়েবসাইট ব্যালেন্স: <b>{panel_bal.get('balance', 'N/A')} {panel_bal.get('currency', 'USD')}</b>"
+            f"💰 ওয়েবসাইট ব্যালেন্স: <b>{panel_bal.get('balance', 'N/A')} {panel_bal.get('currency', 'USD')}</b>"
         )
         kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🔙 অ্যাডমিন প্যানেল", callback_data="adm_back"))
         await call.message.edit_text(stat_text, reply_markup=kb)
@@ -372,7 +371,7 @@ async def admin_save_setting(message: types.Message, state: FSMContext):
     set_config(key, new_val)
     await state.finish()
     await message.answer(
-        f"✅ <b>সফলভাবে আপডেট হয়েছে!</b>\n📌 <code>{key}</code> = <code>{new_val}</code>",
+        f"✅ <b>সফলভাবে আপডেট হয়েছে!</b>\n📌 <code>{key}</code> = <code>{new_val}</code>",
         reply_markup=get_super_admin_keyboard()
     )
 
@@ -380,11 +379,11 @@ async def admin_save_setting(message: types.Message, state: FSMContext):
 @dp.message_handler(state=AdminStates.waiting_for_user_id_coins)
 async def admin_get_uid_coins(message: types.Message, state: FSMContext):
     if not message.text.isdigit():
-        return await message.answer("❌ সঠিক সংখ্যায় User ID দিন:")
+        return await message.answer("❌ সঠিক সংখ্যায় User ID দিন:")
     target_uid = int(message.text)
     get_user(target_uid)
     await state.update_data(target_uid=target_uid)
-    await message.answer("💎 কত কয়েন যোগ বা বিয়োগ করতে চান লিখুন:\n<i>(যোগ করতে: 5000 | কাটতে: -2000)</i>")
+    await message.answer("💎 কত কয়েন যোগ বা বিয়োগ করতে চান লিখুন:\n<i>(যোগ করতে: 5000 | কাটতে: -2000)</i>")
     await AdminStates.waiting_for_coins_amount.set()
 
 
@@ -393,7 +392,7 @@ async def admin_apply_coins(message: types.Message, state: FSMContext):
     try:
         amount = int(message.text.strip())
     except ValueError:
-        return await message.answer("❌ সংখ্যায় পরিমাণ লিখুন:")
+        return await message.answer("❌ সংখ্যায় পরিমাণ লিখুন:")
 
     data = await state.get_data()
     target_uid = data.get("target_uid")
@@ -406,7 +405,7 @@ async def admin_apply_coins(message: types.Message, state: FSMContext):
         pass
 
     await message.answer(
-        f"✅ ইউজার <code>{target_uid}</code> এর ব্যালেন্সে <b>{amount} Coins</b> আপডেট করা হয়েছে!",
+        f"✅ ইউজার <code>{target_uid}</code> এর ব্যালেন্সে <b>{amount} Coins</b> আপডেট করা হয়েছে!",
         reply_markup=get_super_admin_keyboard()
     )
 
@@ -445,7 +444,7 @@ async def admin_send_broadcast(message: types.Message, state: FSMContext):
             except Exception:
                 pass
     await state.finish()
-    await message.answer(f"✅ মোট <b>{sent} জন</b> ইউজারের কাছে মেসেজ পাঠানো হয়েছে!", reply_markup=get_super_admin_keyboard())
+    await message.answer(f"✅ মোট <b>{sent} জন</b> ইউজারের কাছে মেসেজ পাঠানো হয়েছে!", reply_markup=get_super_admin_keyboard())
 
 
 # ================= USER CALLBACK HANDLERS =================
@@ -453,7 +452,7 @@ async def admin_send_broadcast(message: types.Message, state: FSMContext):
 async def user_callbacks(call: types.CallbackQuery, state: FSMContext):
     user_id = call.from_user.id
     if user_id in ADMIN_IDS:
-        return await call.answer("আপনি অ্যাডমিন! /start দিয়ে অ্যাডমিন প্যানেল ব্যবহার করুন।", show_alert=True)
+        return await call.answer("আপনি অ্যাডমিন! /start দিয়ে অ্যাডমিন প্যানেল ব্যবহার করুন।", show_alert=True)
 
     user = get_user(user_id, call.from_user.username or "")
     if user[3] == 1:
@@ -470,8 +469,8 @@ async def user_callbacks(call: types.CallbackQuery, state: FSMContext):
             "👤 <b>আপনার প্রোফাইল তথ্য</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🆔 User ID: <code>{user_id}</code>\n"
-            f"💎 বর্তমান কয়েন: <b>{user[2]} Coins</b>\n"
-            f"⚡ সার্ভিস রেট: <b>{get_config('reaction_rate')} Coins / 1K</b>\n"
+            f"💎 বর্তমান কয়েন: <b>{user[2]} Coins</b>\n"
+            f"⚡️ সার্ভিস রেট: <b>{get_config('reaction_rate')} Coins / 1K</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━"
         )
         kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🔙 প্রধান মেনু", callback_data="usr_main"))
@@ -489,7 +488,7 @@ async def user_callbacks(call: types.CallbackQuery, state: FSMContext):
         text = (
             "👀 <b>ফ্রি টেলিগ্রাম ভিউ সিস্টেম</b>\n\n"
             f"💎 রেট: {get_config('view_rate')} Coins / 1K (Combo Free)\n"
-            "✅ আলাদাভাবে ভিউ অর্ডার করার প্রয়োজন নেই! আপনি রিঅ্যাকশন অর্ডার করলেই প্রতিটি পোস্টে অটোমেটিক ফ্রি ভিউ চলে যাবে।"
+            "✅ আলাদাভাবে ভিউ অর্ডার করার প্রয়োজন নেই! আপনি রিঅ্যাকশন অর্ডার করলেই প্রতিটি পোস্টে অটোমেটিক ফ্রি ভিউ চলে যাবে।"
         )
         kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🔙 প্রধান মেনু", callback_data="usr_main"))
         await call.message.edit_text(text, reply_markup=kb)
@@ -500,12 +499,12 @@ async def user_callbacks(call: types.CallbackQuery, state: FSMContext):
             "🤖 <b>অটোমেটিক গ্রুপ পোস্ট সেটআপ</b>\n\n"
             f"১. প্রথমে বটকে (<code>@{bot_me.username}</code>) আপনার গ্রুপে <b>Admin</b> বানান।\n"
             "২. অ্যাডমিন দিলেই বট অটোমেটিক আপনার গ্রুপ কানেক্ট করে নেবে!\n"
-            "৩. এরপর গ্রুপে নতুন কোনো পোস্ট করলেই আপনার একাউন্ট থেকে কয়েন কেটে অটোমেটিক ওয়েবসাইটে অর্ডার চলে যাবে।\n\n"
-            "অথবা নিচে আপনার গ্রুপের লিংক/ইউজারনেম পাঠিয়ে ম্যানুয়ালিও সেটআপ করতে পারেন:"
+            "৩. এরপর গ্রুপে নতুন কোনো পোস্ট করলেই আপনার একাউন্ট থেকে কয়েন কেটে অটোমেটিক ওয়েবসাইটে অর্ডার চলে যাবে।\n\n"
+            "অথবা নিচে আপনার গ্রুপের লিংক/ইউজারনেম পাঠিয়ে ম্যানুয়ালিও সেটআপ করতে পারেন:"
         )
         kb = types.InlineKeyboardMarkup(row_width=1)
         kb.add(
-            types.InlineKeyboardButton("🔗 গ্রুপ লিংক দিয়ে সেটআপ করুন", callback_data="usr_manual_group_link"),
+            types.InlineKeyboardButton("🔗 গ্রুপ লিংক দিয়ে সেটআপ করুন", callback_data="usr_manual_group_link"),
             types.InlineKeyboardButton("🔙 প্রধান মেনু", callback_data="usr_main")
         )
         await call.message.edit_text(text, reply_markup=kb)
@@ -519,7 +518,7 @@ async def user_callbacks(call: types.CallbackQuery, state: FSMContext):
         text = (
             "💳 <b>বাইনান্স অটো ডিপোজিট (Binance Pay)</b>\n\n"
             f"📌 <b>Binance Pay UID:</b> <code>{uid}</code>\n\n"
-            "উপরের UID-তে ডলার পাঠিয়ে নিচের বাটনে ক্লিক করে আপনার <b>Order ID / TrxID</b> জমা দিন:"
+            "উপরের UID-তে ডলার পাঠিয়ে নিচের বাটনে ক্লিক করে আপনার <b>Order ID / TrxID</b> জমা দিন:"
         )
         kb = types.InlineKeyboardMarkup(row_width=1)
         kb.add(
@@ -534,10 +533,10 @@ async def user_callbacks(call: types.CallbackQuery, state: FSMContext):
 
     elif action == "usr_help":
         text = (
-            "ℹ️ <b>সাহায্য ও নিয়মাবলী</b>\n\n"
-            "• অর্ডার দেওয়ার সময় সঠিক পাবলিক পোস্ট লিংক দিন।\n"
+            "ℹ️ <b>সাহায্য ও নিয়মাবলী</b>\n\n"
+            "• অর্ডার দেওয়ার সময় সঠিক পাবলিক পোস্ট লিংক দিন।\n"
             "• গ্রুপে বটকে অ্যাডমিন করলে প্রতিটি নতুন পোস্টে অটো অর্ডার হবে।\n"
-            "• যেকোনো সমস্যায় অ্যাডমিনের সাথে যোগাযোগ করুন।"
+            "• যেকোনো সমস্যায় অ্যাডমিনের সাথে যোগাযোগ করুন।"
         )
         kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🔙 প্রধান মেনু", callback_data="usr_main"))
         await call.message.edit_text(text, reply_markup=kb)
@@ -548,17 +547,17 @@ async def user_callbacks(call: types.CallbackQuery, state: FSMContext):
 async def user_receive_link(message: types.Message, state: FSMContext):
     link = format_clean_tg_link(message.text)
     if not link.startswith("https://t.me/"):
-        return await message.answer("❌ ভুল লিংক! দয়া করে সঠিক টেলিগ্রাম পোস্ট লিংক দিন (যেমন: https://t.me/channel/123):")
+        return await message.answer("❌ ভুল লিংক! দয়া করে সঠিক টেলিগ্রাম পোস্ট লিংক দিন (যেমন: https://t.me/channel/123):")
     await state.update_data(link=link)
     rate = get_config("reaction_rate")
-    await message.answer(f"🔢 কত পরিমাণ রিঅ্যাকশন (+ ফ্রি ভিউ) নিতে চান সংখ্যায় লিখুন:\n<i>(রেট: ১০০০ পিস = {rate} কয়েন)</i>")
+    await message.answer(f"🔢 কত পরিমাণ রিঅ্যাকশন (+ ফ্রি ভিউ) নিতে চান সংখ্যায় লিখুন:\n<i>(রেট: ১০০০ পিস = {rate} কয়েন)</i>")
     await UserStates.waiting_for_quantity.set()
 
 
 @dp.message_handler(state=UserStates.waiting_for_quantity)
 async def user_receive_qty(message: types.Message, state: FSMContext):
     if not message.text.isdigit():
-        return await message.answer("❌ দয়া করে সঠিক সংখ্যা লিখুন:")
+        return await message.answer("❌ দয়া করে সঠিক সংখ্যা লিখুন:")
     qty = int(message.text)
     data = await state.get_data()
     link = data.get("link")
@@ -571,7 +570,7 @@ async def user_receive_qty(message: types.Message, state: FSMContext):
     if user[2] < cost:
         await state.finish()
         return await message.answer(
-            f"❌ <b>পর্যাপ্ত কয়েন নেই!</b>\nপ্রয়োজন: <b>{cost} Coins</b>\nআপনার আছে: <b>{user[2]} Coins</b>",
+            f"❌ <b>পর্যাপ্ত কয়েন নেই!</b>\nপ্রয়োজন: <b>{cost} Coins</b>\nআপনার আছে: <b>{user[2]} Coins</b>",
             reply_markup=get_user_main_keyboard()
         )
 
@@ -588,22 +587,21 @@ async def user_receive_qty(message: types.Message, state: FSMContext):
         conn.close()
 
         await message.answer(
-            "✅ <b>অর্ডার সফলভাবে ওয়েবসাইটে সাবমিট হয়েছে!</b>\n"
+            "✅ <b>অর্ডার সফলভাবে ওয়েবসাইটে সাবমিট হয়েছে!</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🆔 Order ID: <code>{api_oid}</code>\n"
             f"🔗 Post Link: {link}\n"
             f"📦 Quantity: <b>{qty} (Reaction + Free View)</b>\n"
-            f"💎 কয়েন কাটা হয়েছে: <b>{cost} Coins</b>\n"
+            f"💎 কয়েন কাটা হয়েছে: <b>{cost} Coins</b>\n"
             "📌 Status: <b>Pending ⏳</b>",
             reply_markup=get_user_main_keyboard()
         )
 
-        # অর্ডার লগ গ্রুপে মেসেজ পাঠানো
         try:
             log_group = int(get_config("order_log_group"))
             await bot.send_message(
                 log_group,
-                f"🚀 <b>নতুন অর্ডার প্লেস হয়েছে!</b>\n"
+                f"🚀 <b>নতুন অর্ডার প্লেস হয়েছে!</b>\n"
                 f"👤 User: <a href='tg://user?id={user_id}'>{message.from_user.first_name}</a> (<code>{user_id}</code>)\n"
                 f"🆔 Order ID: <code>{api_oid}</code>\n"
                 f"🔗 Post: {link}\n"
@@ -612,7 +610,7 @@ async def user_receive_qty(message: types.Message, state: FSMContext):
         except Exception:
             pass
     else:
-        await message.answer(f"❌ ওয়েবসাইট API এরর: <code>{res}</code>", reply_markup=get_user_main_keyboard())
+        await message.answer(f"❌ ওয়েবসাইট API এরর: <code>{res}</code>", reply_markup=get_user_main_keyboard())
 
     await state.finish()
 
@@ -625,7 +623,7 @@ async def user_manual_group_setup(message: types.Message, state: FSMContext):
         chat = await bot.get_chat(username)
         bot_member = await bot.get_chat_member(chat.id, (await bot.get_me()).id)
         if bot_member.status not in ['administrator', 'creator']:
-            return await message.answer("❌ বট এখনো ওই গ্রুপের অ্যাডমিন নয়! আগে বটকে গ্রুপে Admin বানান।")
+            return await message.answer("❌ বট এখনো ওই গ্রুপের অ্যাডমিন নয়! আগে বটকে গ্রুপে Admin বানান।")
 
         conn = sqlite3.connect("bot_database.db")
         c = conn.cursor()
@@ -636,12 +634,12 @@ async def user_manual_group_setup(message: types.Message, state: FSMContext):
 
         await state.finish()
         await message.answer(
-            f"✅ <b>গ্রুপ সফলভাবে সেটআপ হয়েছে!</b>\n📌 গ্রুপ: <b>{chat.title}</b>\n🔗 লিংক: {clean_link}\n"
+            f"✅ <b>গ্রুপ সফলভাবে সেটআপ হয়েছে!</b>\n📌 গ্রুপ: <b>{chat.title}</b>\n🔗 লিংক: {clean_link}\n"
             "এখন ওই গ্রুপে নতুন পোস্ট করলেই অটো অর্ডার হবে!",
             reply_markup=get_user_main_keyboard()
         )
     except Exception as e:
-        await message.answer(f"❌ গ্রুপ খুঁজে পাওয়া যায়নি বা বট অ্যাডমিন নেই। সঠিক পাবলিক লিংক দিন।\nError: {e}")
+        await message.answer(f"❌ গ্রুপ খুঁজে পাওয়া যায়নি বা বট অ্যাডমিন নেই। সঠিক পাবলিক লিংক দিন্ন।\nError: {e}")
 
 
 @dp.message_handler(state=UserStates.waiting_for_deposit_proof)
@@ -651,14 +649,14 @@ async def user_deposit_proof_submit(message: types.Message, state: FSMContext):
         try:
             await bot.send_message(
                 adm,
-                f"💰 <b>নতুন বাইনান্স ডিপোজিট রিকোয়েস্ট!</b>\n\n"
+                f"💰 <b>নতুন বাইনান্স ডিপোজিট রিকোয়েস্ট!</b>\n\n"
                 f"👤 ইউজার: {user.full_name} (<code>{user.id}</code>)\n"
                 f"📝 প্রুফ/TrxID: <code>{message.text}</code>"
             )
         except Exception:
             pass
     await state.finish()
-    await message.answer("✅ আপনার ডিপোজিট প্রুফ অ্যাডমিনের কাছে পাঠানো হয়েছে! যাচাই করে কয়েন যোগ করে দেওয়া হবে।", reply_markup=get_user_main_keyboard())
+    await message.answer("✅ আপনার ডিপোজিট প্রুফ অ্যাডমিনের কাছে পাঠানো হয়েছে! যাচাই করে কয়েন যোগ করে দেওয়া হবে।", reply_markup=get_user_main_keyboard())
 
 
 # ================= AUTO ADMIN DETECTION IN GROUPS =================
@@ -669,7 +667,6 @@ async def on_bot_added_as_admin(update: types.ChatMemberUpdated):
     adder = update.from_user
 
     if new_status in ['administrator', 'creator'] and chat.type in ['group', 'supergroup', 'channel']:
-        # ইউজার বট স্টার্ট করে থাকলে অটোমেটিক সেটআপ হয়ে যাবে
         conn = sqlite3.connect("bot_database.db")
         c = conn.cursor()
         c.execute("SELECT user_id FROM users WHERE user_id = ?", (adder.id,))
@@ -683,7 +680,7 @@ async def on_bot_added_as_admin(update: types.ChatMemberUpdated):
                 await bot.send_message(
                     adder.id,
                     f"🤖 <b>অটো গ্রুপ সেটআপ সম্পন্ন!</b>\n\n"
-                    f"আপনি <b>{chat.title}</b> গ্রুপে বটকে অ্যাডমিন দিয়েছেন। এখন থেকে এই গ্রুপে নতুন পোস্ট করলেই অটোমেটিক <b>{auto_qty}</b> রিঅ্যাকশন + ফ্রি ভিউ অর্ডার হয়ে যাবে!"
+                    f"আপনি <b>{chat.title}</b> গ্রুপে বটকে অ্যাডমিন দিয়েছেন। এখন থেকে এই গ্রুপে নতুন পোস্ট করলেই অটোমেটিক <b>{auto_qty}</b> রিঅ্যাকশন + ফ্রি ভিউ অর্ডার হয়ে যাবে!"
                 )
             except Exception:
                 pass
@@ -712,7 +709,6 @@ async def auto_group_new_post_trigger(message: types.Message):
     if user[3] == 1:
         return
 
-    # সঠিকভাবে গ্রুপের নির্দিষ্ট নতুন পোস্টের লিংক তৈরি করা
     if message.chat.username:
         post_link = f"https://t.me/{message.chat.username}/{message.message_id}"
     else:
@@ -724,7 +720,7 @@ async def auto_group_new_post_trigger(message: types.Message):
 
     if user[2] < cost:
         try:
-            await bot.send_message(owner_id, f"⚠️ আপনার গ্রুপ <b>{message.chat.title}</b>-এ নতুন পোস্ট হয়েছে, কিন্তু কয়েন কম থাকায় অটো অর্ডার হয়নি!")
+            await bot.send_message(owner_id, f"⚠️ আপনার গ্রুপ <b>{message.chat.title}</b>-এ নতুন পোস্ট হয়েছে, কিন্তু কয়েন কম থাকায় অটো অর্ডার হয়নি!")
         except Exception:
             pass
         return
@@ -741,12 +737,11 @@ async def auto_group_new_post_trigger(message: types.Message):
         conn.commit()
         conn.close()
 
-        # অর্ডার লগ গ্রুপে ও ইউজারের কাছে স্ট্যাটাস মেসেজ পাঠানো
         try:
             log_group = int(get_config("order_log_group"))
             await bot.send_message(
                 log_group,
-                f"⚡ <b>অটো পোস্ট অর্ডার প্লেস হয়েছে!</b>\n"
+                f"⚡️ <b>অটো পোস্ট অর্ডার প্লেস হয়েছে!</b>\n"
                 f"👤 Owner ID: <code>{owner_id}</code>\n"
                 f"🆔 Order ID: <code>{api_oid}</code>\n"
                 f"🔗 Post Link: {post_link}\n"
@@ -756,46 +751,27 @@ async def auto_group_new_post_trigger(message: types.Message):
             pass
 
 
-# ================= BACKGROUND AUTO ORDER STATUS CHECKER =================
-async def auto_status_watcher():
-    while True:
-        await asyncio.sleep(30)  # প্রতি ৩০ সেকেন্ড পরপর প্যানেল থেকে অর্ডার স্ট্যাটাস চেক করবে
-        try:
-            conn = sqlite3.connect("bot_database.db")
-            c = conn.cursor()
-            c.execute("SELECT id, api_order_id, user_id, chat_id, link FROM orders WHERE status NOT IN ('Completed', 'Canceled', 'Partial')")
-            pending_orders = c.fetchall()
+# ================= RAILWAY DUMMY WEB SERVER =================
+async def handle(request):
+    return web.Response(text="Bot is running successfully on Railway!")
 
-            for oid, api_oid, uid, cid, link in pending_orders:
-                st = smm.status(api_oid)
-                new_status = st.get("status")
-                if new_status and new_status in ["Completed", "Canceled", "Partial"]:
-                    c.execute("UPDATE orders SET status = ? WHERE id = ?", (new_status, oid))
-                    conn.commit()
-
-                    emoji = "✅" if new_status == "Completed" else "⚠️"
-                    msg_text = (
-                        f"{emoji} <b>অর্ডার স্ট্যাটাস আপডেট!</b>\n"
-                        f"🆔 Order ID: <code>{api_oid}</code>\n"
-                        f"🔗 Post Link: {link}\n"
-                        f"📌 বর্তমান অবস্থা: <b>{new_status}</b>"
-                    )
-                    try:
-                        await bot.send_message(uid, msg_text)
-                        log_group = int(get_config("order_log_group"))
-                        await bot.send_message(log_group, msg_text)
-                    except Exception:
-                        pass
-            conn.close()
-        except Exception as e:
-            logging.error(f"Status Watcher Error: {e}")
+async def web_server():
+    app = web.Application()
+    app.add_routes([web.get('/', handle)])
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logging.info(f"Web server started on port {port}")
 
 
-async def on_startup(dp):
+# ================= BACKGROUND STARTUP =================
+async def on_startup(dispatcher):
     init_db()
-    asyncio.create_task(auto_status_watcher())
+    asyncio.create_task(web_server())
+    logging.info("Telegram Bot and Web Server started successfully on Railway!")
 
 
 if __name__ == '__main__':
-    print("Super Admin & Automated SMM Bot is starting...")
     executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
